@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+
+  mng_db:
+    container_name: mng_db
+    image: "postgres:11.12-alpine"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=${POSTGRES_DB}
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - ./dbdata:/var/lib/postgresql/data/:delegated
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  mng_api:
+    container_name: mng_api
+    build:
+      context: ../api
+      dockerfile: ../docker/dockerfiles/api.dockerfile
+    volumes:
+      - ../api:/app:delegated
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - DEBUG=${DEBUG}
+
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_NAME=${POSTGRES_DB}
+      - DB_HOST=${POSTGRES_HOST}
+      - DB_PORT=5432
+      - DB_TEST=mng_test
+    tty: true
+    depends_on:
+      - drp_db
+
+  mng_nginx:
+    container_name: mng_nginx
+    build:
+      context: ./
+      dockerfile: ./dockerfiles/nginx.dockerfile
+    volumes:
+      - ./ssl:/resource/ssl
+      - ../api/public/:/resource/public
+      - ./conf.d/:/etc/nginx/conf.d
+    ports:
+      - 80:80
+      # - 443:443
+    restart: always
+    depends_on:
+      - mng_api
